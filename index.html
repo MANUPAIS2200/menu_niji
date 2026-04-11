@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NijiDex | Menú en vivo</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="background-grid"></div>
+
+  <main class="device">
+    <section class="panel panel-left">
+      <div class="panel-top">
+        <div class="lens">
+          <div class="lens-inner"></div>
+          <div class="lens-shine"></div>
+        </div>
+
+        <div class="lights">
+          <span class="light red"></span>
+          <span class="light yellow"></span>
+          <span class="light green"></span>
+        </div>
+      </div>
+
+      <div class="left-cut"></div>
+
+      <div class="screen-shell">
+        <div class="screen-dots">
+          <span></span>
+          <span></span>
+        </div>
+
+        <div class="screen" id="screen">
+          <div class="scanline"></div>
+
+          <div class="screen-content">
+            <div class="chip" id="itemCategory">CARGANDO</div>
+            <h1 id="itemName">NijiDex</h1>
+            <div class="price" id="itemPrice">Conectando menú...</div>
+            <div class="subtitle" id="itemSubtitle">Esperá un momento</div>
+
+            <p class="description" id="itemDescription">
+              El menú se cargará automáticamente desde Firestore.
+            </p>
+
+            <div class="stats">
+              <div class="stat-card">
+                <span>Tipo</span>
+                <strong id="itemType">-</strong>
+              </div>
+              <div class="stat-card">
+                <span>Rareza</span>
+                <strong id="itemRarity">-</strong>
+              </div>
+              <div class="stat-card">
+                <span>Misión</span>
+                <strong id="itemMission">-</strong>
+              </div>
+            </div>
+
+            <div class="meters">
+              <div class="meter-row">
+                <label>Energía</label>
+                <div class="meter"><span id="energyBar"></span></div>
+              </div>
+              <div class="meter-row">
+                <label>Dulzura</label>
+                <div class="meter"><span id="sweetBar"></span></div>
+              </div>
+              <div class="meter-row">
+                <label>Popularidad</label>
+                <div class="meter"><span id="popularBar"></span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="speaker"></div>
+      </div>
+
+      <div class="bottom-controls">
+        <div class="controls-left">
+          <div class="big-blue-btn"></div>
+
+          <div class="mini-bars">
+            <span class="mini green"></span>
+            <span class="mini orange"></span>
+          </div>
+
+          <div class="dex-label">NIJI-DEX</div>
+        </div>
+
+        <div class="dpad">
+          <span class="up"></span>
+          <span class="right"></span>
+          <span class="down"></span>
+          <span class="left"></span>
+          <span class="center"></span>
+        </div>
+      </div>
+    </section>
+
+    <div class="hinge">
+      <span></span>
+      <span></span>
+      <span></span>
+    </div>
+
+    <section class="panel panel-right">
+      <div class="right-cut"></div>
+
+      <div class="mini-screen">
+        <div class="mini-screen-gloss"></div>
+        <div class="mini-screen-text">
+          <small>SISTEMA</small>
+          <strong id="statusText">Esperando conexión con Firestore...</strong>
+        </div>
+      </div>
+
+      <div class="blue-grid">
+        <span></span><span></span><span></span><span></span><span></span>
+        <span></span><span></span><span></span><span></span><span></span>
+      </div>
+
+      <section class="categories-box">
+        <div class="box-title">Categorías</div>
+        <div class="categories" id="categories"></div>
+      </section>
+
+      <div class="list-header">
+        <span>Registros</span>
+        <span id="resultsCount">0</span>
+      </div>
+
+      <section class="records-list" id="menuList"></section>
+
+      <div class="right-controls">
+        <div class="small-bars">
+          <span></span>
+          <span></span>
+        </div>
+
+        <div class="dark-buttons">
+          <span></span>
+          <span></span>
+        </div>
+
+        <div class="yellow-btn"></div>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="script.js"></script>
+</body>
+</html>
