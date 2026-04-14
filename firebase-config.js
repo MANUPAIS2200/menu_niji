@@ -8,5 +8,6 @@ export const firebaseConfig = {
   measurementId: "G-0J6Y4Z2EFD"
 };
 
+
 export const MENU_ITEMS_COLLECTION = "menuItems";
 export const DEFAULT_ORDER_FIELD = "order";
