@@ -2,6 +2,7 @@
 // La encontrás en:
 // Configuración del proyecto > General > Tus apps > SDK setup and configuration
 
+
 const firebaseConfig = {
   apiKey: "AIzaSyC4v0tuI0qCHvyjDRZm3cHPTvwgtkes7xE",
   authDomain: "niji-app-2ac82.firebaseapp.com",
