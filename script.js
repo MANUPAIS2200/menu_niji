@@ -11,12 +11,18 @@ import {
 import {
   firebaseConfig,
   MENU_ITEMS_COLLECTION,
+  MENU_CATEGORIES_COLLECTION,
   DEFAULT_ORDER_FIELD
 } from "./firebase-config.js";
 
-const categoriesContainer = document.getElementById("categories");
-const menuList = document.getElementById("menuList");
+const desktopCategories = document.getElementById("desktopCategories");
+const mobileCategories = document.getElementById("mobileCategories");
+
+const desktopMenuList = document.getElementById("desktopMenuList");
+const mobileMenuList = document.getElementById("mobileMenuList");
+
 const countEl = document.getElementById("resultsCount");
+const mobileCountEl = document.getElementById("mobileResultsCount");
 const statusText = document.getElementById("statusText");
 
 const itemName = document.getElementById("itemName");
@@ -31,7 +37,13 @@ const energyBar = document.getElementById("energyBar");
 const sweetBar = document.getElementById("sweetBar");
 const popularBar = document.getElementById("popularBar");
 
+const openMenuBtn = document.getElementById("openMenuBtn");
+const closeMenuBtn = document.getElementById("closeMenuBtn");
+const bottomSheet = document.getElementById("bottomSheet");
+const mobileOverlay = document.getElementById("mobileOverlay");
+
 let menuData = [];
+let categoriesData = [];
 let currentFilter = "all";
 let currentId = null;
 
@@ -39,15 +51,41 @@ function setStatus(message) {
   statusText.textContent = message;
 }
 
+function isMobile() {
+  return window.innerWidth <= 768;
+}
+
+function openSheet() {
+  bottomSheet.classList.add("active");
+  mobileOverlay.classList.add("active");
+  bottomSheet.setAttribute("aria-hidden", "false");
+  document.body.style.overflow = "hidden";
+}
+
+function closeSheet() {
+  bottomSheet.classList.remove("active");
+  mobileOverlay.classList.remove("active");
+  bottomSheet.setAttribute("aria-hidden", "true");
+  document.body.style.overflow = "";
+}
+
+openMenuBtn.addEventListener("click", openSheet);
+closeMenuBtn.addEventListener("click", closeSheet);
+mobileOverlay.addEventListener("click", closeSheet);
+
+function validateFirebaseConfig() {
+  if (!firebaseConfig.apiKey || firebaseConfig.apiKey === "PEGAR_API_KEY") {
+    throw new Error("Completá la configuración de Firebase en firebase-config.js.");
+  }
+}
+
 function formatPrice(value) {
   if (typeof value === "number") {
     return "$ " + value.toLocaleString("es-AR");
   }
-
   if (typeof value === "string" && value.trim() !== "") {
     return value;
   }
-
   return "Consultar";
 }
 
@@ -119,6 +157,7 @@ function mapFirestoreItem(docSnapshot) {
     subtitle: raw.shortDescription || raw.description || categoryLabel,
     category: categoryLabel,
     categoryKey: categoryLabel.toLowerCase().trim(),
+    categoryId: raw.categoryId ? String(raw.categoryId).trim() : "",
     categoryLabel: categoryLabel.toUpperCase(),
     price: formatPrice(raw.price),
     description: raw.description || "Producto disponible en Niji Café.",
@@ -130,6 +169,22 @@ function mapFirestoreItem(docSnapshot) {
     popular: meters.popular,
     order: typeof raw.order === "number" ? raw.order : 9999
   };
+}
+
+function mapCategory(docSnapshot) {
+  const raw = docSnapshot.data();
+  return {
+    id: String(docSnapshot.id).trim(),
+    label: raw.label || docSnapshot.id,
+    active: !!raw.active,
+    order: typeof raw.order === "number" ? raw.order : 9999
+  };
+}
+
+function capitalize(value) {
+  const text = String(value || "").trim();
+  if (!text) return "-";
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 function updateDisplay(item) {
@@ -147,26 +202,6 @@ function updateDisplay(item) {
   setStatus("Registro detectado: " + item.name);
 }
 
-function capitalize(value) {
-  const text = String(value || "").trim();
-  if (!text) return "-";
-  return text.charAt(0).toUpperCase() + text.slice(1);
-}
-
-function buildCategories() {
-  const uniqueCategories = [...new Set(menuData.map(item => item.category))];
-
-  categoriesContainer.innerHTML = "";
-
-  const allBtn = createCategoryButton("Todos", "all", true);
-  categoriesContainer.appendChild(allBtn);
-
-  uniqueCategories.forEach(category => {
-    const button = createCategoryButton(category, category.toLowerCase().trim(), false);
-    categoriesContainer.appendChild(button);
-  });
-}
-
 function createCategoryButton(label, value, isActive) {
   const btn = document.createElement("button");
   btn.className = "category-btn" + (isActive ? " active" : "");
@@ -175,12 +210,56 @@ function createCategoryButton(label, value, isActive) {
 
   btn.addEventListener("click", () => {
     document.querySelectorAll(".category-btn").forEach(x => x.classList.remove("active"));
-    btn.classList.add("active");
+    document.querySelectorAll('.category-btn[data-filter="' + value + '"]').forEach(x => {
+      x.classList.add("active");
+    });
     currentFilter = value;
     renderList();
   });
 
   return btn;
+}
+
+function buildCategories() {
+  desktopCategories.innerHTML = "";
+  mobileCategories.innerHTML = "";
+
+  desktopCategories.appendChild(createCategoryButton("Todos", "all", currentFilter === "all"));
+  mobileCategories.appendChild(createCategoryButton("Todos", "all", currentFilter === "all"));
+
+  let categoriesToRender = [];
+
+  if (categoriesData.length) {
+    categoriesToRender = categoriesData
+      .filter(cat => cat.active)
+      .map(cat => ({
+        id: String(cat.id).trim(),
+        label: cat.label
+      }))
+      .filter(cat =>
+        menuData.some(item =>
+          item.categoryId === cat.id || item.categoryKey === cat.id.toLowerCase()
+        )
+      );
+  } else {
+    const seen = new Set();
+    menuData.forEach(item => {
+      const key = item.categoryId || item.categoryKey;
+      if (!seen.has(key)) {
+        seen.add(key);
+        categoriesToRender.push({
+          id: key,
+          label: item.category
+        });
+      }
+    });
+  }
+
+  categoriesToRender.forEach(category => {
+    const value = String(category.id).toLowerCase().trim();
+    desktopCategories.appendChild(createCategoryButton(category.label, value, currentFilter === value));
+    mobileCategories.appendChild(createCategoryButton(category.label, value, currentFilter === value));
+  });
 }
 
 function buildRecord(item) {
@@ -205,21 +284,36 @@ function buildRecord(item) {
     currentId = item.id;
     updateDisplay(item);
     renderList();
+
+    if (isMobile()) {
+      closeSheet();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
   });
 
   return article;
 }
 
-function renderList() {
-  const filtered = currentFilter === "all"
-    ? menuData
-    : menuData.filter(item => item.categoryKey === currentFilter);
+function getFilteredItems() {
+  if (currentFilter === "all") return menuData;
 
-  menuList.innerHTML = "";
+  return menuData.filter(item => {
+    return item.categoryKey === currentFilter || item.categoryId.toLowerCase() === currentFilter;
+  });
+}
+
+function renderList() {
+  const filtered = getFilteredItems();
+
+  desktopMenuList.innerHTML = "";
+  mobileMenuList.innerHTML = "";
 
   if (!filtered.length) {
     countEl.textContent = "0";
-    menuList.innerHTML = `<div class="empty-state">No hay productos para esta categoría.</div>`;
+    mobileCountEl.textContent = "0";
+    const emptyHtml = '<div class="empty-state">No hay productos para esta categoría.</div>';
+    desktopMenuList.innerHTML = emptyHtml;
+    mobileMenuList.innerHTML = emptyHtml;
     return;
   }
 
@@ -228,8 +322,13 @@ function renderList() {
     updateDisplay(filtered[0]);
   }
 
-  filtered.forEach(item => menuList.appendChild(buildRecord(item)));
-  countEl.textContent = filtered.length;
+  filtered.forEach(item => {
+    desktopMenuList.appendChild(buildRecord(item));
+    mobileMenuList.appendChild(buildRecord(item));
+  });
+
+  countEl.textContent = String(filtered.length);
+  mobileCountEl.textContent = String(filtered.length);
 }
 
 function escapeHtml(value) {
@@ -241,6 +340,23 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
+async function loadCategories(db) {
+  try {
+    const categoriesRef = collection(db, MENU_CATEGORIES_COLLECTION);
+    const categoriesQuery = query(
+      categoriesRef,
+      where("active", "==", true),
+      orderBy(DEFAULT_ORDER_FIELD, "asc")
+    );
+
+    const snapshot = await getDocs(categoriesQuery);
+    categoriesData = snapshot.docs.map(mapCategory);
+  } catch (error) {
+    console.warn("No se pudieron cargar las categorías. Se usarán las de los productos.", error);
+    categoriesData = [];
+  }
+}
+
 async function loadMenu() {
   try {
     validateFirebaseConfig();
@@ -250,6 +366,8 @@ async function loadMenu() {
 
     setStatus("Consultando registros en Firestore...");
 
+    await loadCategories(db);
+
     const menuRef = collection(db, MENU_ITEMS_COLLECTION);
     const menuQuery = query(
       menuRef,
@@ -258,7 +376,6 @@ async function loadMenu() {
     );
 
     const snapshot = await getDocs(menuQuery);
-
     menuData = snapshot.docs.map(mapFirestoreItem);
 
     if (!menuData.length) {
@@ -280,8 +397,10 @@ async function loadMenu() {
     }
 
     menuData.sort((a, b) => {
-      if (a.categoryKey < b.categoryKey) return -1;
-      if (a.categoryKey > b.categoryKey) return 1;
+      const aCat = a.categoryId || a.categoryKey;
+      const bCat = b.categoryId || b.categoryKey;
+      if (aCat < bCat) return -1;
+      if (aCat > bCat) return 1;
       return a.order - b.order;
     });
 
@@ -304,14 +423,11 @@ async function loadMenu() {
     energyBar.style.width = "0%";
     sweetBar.style.width = "0%";
     popularBar.style.width = "0%";
-    menuList.innerHTML = `<div class="empty-state">No se pudo cargar el menú. Revisá la consola del navegador.</div>`;
-    countEl.textContent = "0";
-  }
-}
 
-function validateFirebaseConfig() {
-  if (!firebaseConfig || firebaseConfig.apiKey === "PEGAR_API_KEY") {
-    throw new Error("Falta completar firebase-config.js con la configuración real del proyecto.");
+    desktopMenuList.innerHTML = '<div class="empty-state">No se pudo cargar el menú. Revisá la consola del navegador.</div>';
+    mobileMenuList.innerHTML = '<div class="empty-state">No se pudo cargar el menú. Revisá la consola del navegador.</div>';
+    countEl.textContent = "0";
+    mobileCountEl.textContent = "0";
   }
 }
 
