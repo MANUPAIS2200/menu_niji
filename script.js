@@ -12,6 +12,7 @@ import {
   firebaseConfig,
   MENU_ITEMS_COLLECTION,
   MENU_CATEGORIES_COLLECTION,
+  MENU_TAGS_COLLECTION,
   DEFAULT_ORDER_FIELD
 } from "./firebase-config.js";
 
@@ -46,6 +47,7 @@ const mobileOverlay = document.getElementById("mobileOverlay");
 
 let menuData = [];
 let categoriesData = [];
+let tagsData = [];
 let currentFilter = "all";
 let currentId = null;
 
@@ -55,6 +57,49 @@ function setStatus(message) {
 
 function isMobile() {
   return window.innerWidth <= 768;
+}
+function mapTag(docSnapshot) {
+  const raw = docSnapshot.data();
+  return {
+    id: String(docSnapshot.id).trim(),
+    label: raw.label || docSnapshot.id,
+    active: !!raw.active,
+    order: typeof raw.order === "number" ? raw.order : 9999
+  };
+}
+
+async function loadTags(db) {
+  try {
+    const tagsRef = collection(db, MENU_TAGS_COLLECTION);
+    const tagsQuery = query(
+      tagsRef,
+      where("active", "==", true),
+      orderBy(DEFAULT_ORDER_FIELD, "asc")
+    );
+
+    const snapshot = await getDocs(tagsQuery);
+    tagsData = snapshot.docs.map(mapTag);
+  } catch (error) {
+    console.warn("No se pudieron cargar los tags.", error);
+    tagsData = [];
+  }
+}
+function getCategoryLabelById(categoryId, fallbackLabel) {
+  if (!categoryId) return fallbackLabel || "Sin categoría";
+
+  const found = categoriesData.find(cat => String(cat.id).trim() === String(categoryId).trim());
+  return found?.label || fallbackLabel || "Sin categoría";
+}
+
+function getTagLabels(tagIds) {
+  if (!Array.isArray(tagIds) || !tagIds.length) return [];
+
+  return tagIds
+    .map(tagId => {
+      const found = tagsData.find(tag => String(tag.id).trim() === String(tagId).trim());
+      return found?.label || null;
+    })
+    .filter(Boolean);
 }
 
 function openSheet() {
@@ -114,33 +159,26 @@ function normalizeTags(rawItem) {
 }
 
 function guessMeters(type, featured) {
+  const normalized = String(type || "").toLowerCase();
+
   const base = {
     energy: 45,
     sweet: 40,
     popular: featured ? 92 : 70
   };
 
-  switch (type) {
-    case "Caliente":
-      base.energy = 82;
-      base.sweet = 24;
-      break;
-    case "Frío":
-      base.energy = 38;
-      base.sweet = 58;
-      break;
-    case "Dulce":
-      base.energy = 20;
-      base.sweet = 90;
-      break;
-    case "Brunch":
-      base.energy = 55;
-      base.sweet = 12;
-      break;
-    case "Combo":
-      base.energy = 65;
-      base.sweet = 50;
-      break;
+  if (normalized.includes("bebida")) {
+    base.energy = 82;
+    base.sweet = 24;
+  } else if (normalized.includes("dulce")) {
+    base.energy = 20;
+    base.sweet = 90;
+  } else if (normalized.includes("desay") || normalized.includes("brunch")) {
+    base.energy = 55;
+    base.sweet = 18;
+  } else if (normalized.includes("combo")) {
+    base.energy = 65;
+    base.sweet = 50;
   }
 
   return base;
@@ -148,9 +186,10 @@ function guessMeters(type, featured) {
 
 function mapFirestoreItem(docSnapshot) {
   const raw = docSnapshot.data();
-  const type = normalizeType(raw);
-  const categoryLabel = normalizeCategory(raw);
-  const tags = normalizeTags(raw);
+
+  const categoryLabel = getCategoryLabelById(raw.categoryId, raw.categoryLabel || raw.category);
+  const tagLabels = getTagLabels(raw.tags);
+  const type = categoryLabel || "Sin categoría";
   const meters = guessMeters(type, !!raw.featured);
 
   return {
@@ -158,15 +197,15 @@ function mapFirestoreItem(docSnapshot) {
     name: raw.name || "Sin nombre",
     subtitle: raw.shortDescription || raw.description || categoryLabel,
     category: categoryLabel,
-    categoryKey: categoryLabel.toLowerCase().trim(),
+    categoryKey: String(categoryLabel || "").toLowerCase().trim(),
     categoryId: raw.categoryId ? String(raw.categoryId).trim() : "",
-    categoryLabel: categoryLabel.toUpperCase(),
+    categoryLabel: String(categoryLabel || "Sin categoría").toUpperCase(),
     price: formatPrice(raw.price),
     description: raw.description || "Producto disponible en Niji Café.",
     imageUrl: raw.imageUrl || "",
-    type,
-    rarity: raw.featured ? "Destacado" : (tags[0] || "Clásico"),
-    mission: raw.stockMode || "Disponible",
+    type: categoryLabel || "Sin categoría",
+    rarity: tagLabels.length ? tagLabels.join(", ") : "Sin tags",
+    mission: "Disponible",
     energy: meters.energy,
     sweet: meters.sweet,
     popular: meters.popular,
@@ -380,7 +419,8 @@ async function loadMenu() {
 
     setStatus("Consultando registros en Firestore...");
 
-    await loadCategories(db);
+   await loadCategories(db);
+await loadTags(db);
 
     const menuRef = collection(db, MENU_ITEMS_COLLECTION);
     const menuQuery = query(

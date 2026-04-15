@@ -11,3 +11,4 @@ export const firebaseConfig = {
 export const MENU_ITEMS_COLLECTION = "menuItems";
 export const MENU_CATEGORIES_COLLECTION = "menuCategories";
 export const DEFAULT_ORDER_FIELD = "order";
+export const MENU_TAGS_COLLECTION = "menuTags";
