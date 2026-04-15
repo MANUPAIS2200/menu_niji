@@ -33,6 +33,8 @@ const itemDescription = document.getElementById("itemDescription");
 const itemType = document.getElementById("itemType");
 const itemRarity = document.getElementById("itemRarity");
 const itemMission = document.getElementById("itemMission");
+const itemImage = document.getElementById("itemImage");
+const itemImagePlaceholder = document.getElementById("itemImagePlaceholder");
 const energyBar = document.getElementById("energyBar");
 const sweetBar = document.getElementById("sweetBar");
 const popularBar = document.getElementById("popularBar");
@@ -161,6 +163,7 @@ function mapFirestoreItem(docSnapshot) {
     categoryLabel: categoryLabel.toUpperCase(),
     price: formatPrice(raw.price),
     description: raw.description || "Producto disponible en Niji Café.",
+    imageUrl: raw.imageUrl || "",
     type,
     rarity: raw.featured ? "Destacado" : (tags[0] || "Clásico"),
     mission: raw.stockMode || "Disponible",
@@ -199,6 +202,17 @@ function updateDisplay(item) {
   energyBar.style.width = item.energy + "%";
   sweetBar.style.width = item.sweet + "%";
   popularBar.style.width = item.popular + "%";
+
+  if (item.imageUrl) {
+    itemImage.src = item.imageUrl;
+    itemImage.classList.remove("hidden");
+    itemImagePlaceholder.classList.add("hidden");
+  } else {
+    itemImage.removeAttribute("src");
+    itemImage.classList.add("hidden");
+    itemImagePlaceholder.classList.remove("hidden");
+  }
+
   setStatus("Registro detectado: " + item.name);
 }
 
@@ -388,6 +402,8 @@ async function loadMenu() {
       itemType.textContent = "-";
       itemRarity.textContent = "-";
       itemMission.textContent = "-";
+      itemImage.classList.add("hidden");
+      itemImagePlaceholder.classList.remove("hidden");
       energyBar.style.width = "0%";
       sweetBar.style.width = "0%";
       popularBar.style.width = "0%";
@@ -420,6 +436,8 @@ async function loadMenu() {
     itemType.textContent = "-";
     itemRarity.textContent = "-";
     itemMission.textContent = "-";
+    itemImage.classList.add("hidden");
+    itemImagePlaceholder.classList.remove("hidden");
     energyBar.style.width = "0%";
     sweetBar.style.width = "0%";
     popularBar.style.width = "0%";
