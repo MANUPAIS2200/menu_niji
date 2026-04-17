@@ -454,6 +454,7 @@ async function loadMenu() {
 
     currentId = menuData[0].id;
     buildCategories();
+    
     updateDisplay(menuData[0]);
     renderList();
     setStatus("Menú cargado correctamente desde Firestore.");
