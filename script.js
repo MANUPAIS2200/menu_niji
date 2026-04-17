@@ -58,49 +58,6 @@ function setStatus(message) {
 function isMobile() {
   return window.innerWidth <= 768;
 }
-function mapTag(docSnapshot) {
-  const raw = docSnapshot.data();
-  return {
-    id: String(docSnapshot.id).trim(),
-    label: raw.label || docSnapshot.id,
-    active: !!raw.active,
-    order: typeof raw.order === "number" ? raw.order : 9999
-  };
-}
-
-async function loadTags(db) {
-  try {
-    const tagsRef = collection(db, MENU_TAGS_COLLECTION);
-    const tagsQuery = query(
-      tagsRef,
-      where("active", "==", true),
-      orderBy(DEFAULT_ORDER_FIELD, "asc")
-    );
-
-    const snapshot = await getDocs(tagsQuery);
-    tagsData = snapshot.docs.map(mapTag);
-  } catch (error) {
-    console.warn("No se pudieron cargar los tags.", error);
-    tagsData = [];
-  }
-}
-function getCategoryLabelById(categoryId, fallbackLabel) {
-  if (!categoryId) return fallbackLabel || "Sin categoría";
-
-  const found = categoriesData.find(cat => String(cat.id).trim() === String(categoryId).trim());
-  return found?.label || fallbackLabel || "Sin categoría";
-}
-
-function getTagLabels(tagIds) {
-  if (!Array.isArray(tagIds) || !tagIds.length) return [];
-
-  return tagIds
-    .map(tagId => {
-      const found = tagsData.find(tag => String(tag.id).trim() === String(tagId).trim());
-      return found?.label || null;
-    })
-    .filter(Boolean);
-}
 
 function openSheet() {
   bottomSheet.classList.add("active");
@@ -136,30 +93,66 @@ function formatPrice(value) {
   return "Consultar";
 }
 
-function normalizeCategory(rawItem) {
-  const value = rawItem.categoryLabel || rawItem.category || "Sin categoría";
-  return String(value).trim();
+function capitalize(value) {
+  const text = String(value || "").trim();
+  if (!text) return "-";
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
-function normalizeType(rawItem) {
-  const category = normalizeCategory(rawItem).toLowerCase();
-
-  if (category.includes("fr")) return "Frío";
-  if (category.includes("dul")) return "Dulce";
-  if (category.includes("brunch") || category.includes("desay")) return "Brunch";
-  if (category.includes("combo")) return "Combo";
-  return "Caliente";
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
-function normalizeTags(rawItem) {
-  if (Array.isArray(rawItem.tags)) {
-    return rawItem.tags.filter(Boolean).map(t => String(t));
-  }
-  return [];
+function mapCategory(docSnapshot) {
+  const raw = docSnapshot.data();
+  return {
+    id: String(docSnapshot.id).trim(),
+    label: raw.label || docSnapshot.id,
+    active: !!raw.active,
+    order: typeof raw.order === "number" ? raw.order : 9999
+  };
 }
 
-function guessMeters(type, featured) {
-  const normalized = String(type || "").toLowerCase();
+function mapTag(docSnapshot) {
+  const raw = docSnapshot.data();
+  return {
+    id: String(docSnapshot.id).trim(),
+    label: raw.label || docSnapshot.id,
+    active: !!raw.active,
+    order: typeof raw.order === "number" ? raw.order : 9999
+  };
+}
+
+function getCategoryLabelById(categoryId, fallbackLabel) {
+  if (!categoryId) return fallbackLabel || "Sin categoría";
+
+  const found = categoriesData.find(
+    cat => String(cat.id).trim() === String(categoryId).trim()
+  );
+
+  return found?.label || fallbackLabel || "Sin categoría";
+}
+
+function getTagLabels(tagIds) {
+  if (!Array.isArray(tagIds) || !tagIds.length) return [];
+
+  return tagIds
+    .map(tagId => {
+      const found = tagsData.find(
+        tag => String(tag.id).trim() === String(tagId).trim()
+      );
+      return found?.label || null;
+    })
+    .filter(Boolean);
+}
+
+function guessMeters(categoryLabel, featured) {
+  const normalized = String(categoryLabel || "").toLowerCase();
 
   const base = {
     energy: 45,
@@ -187,13 +180,17 @@ function guessMeters(type, featured) {
 function mapFirestoreItem(docSnapshot) {
   const raw = docSnapshot.data();
 
-  const categoryLabel = getCategoryLabelById(raw.categoryId, raw.categoryLabel || raw.category);
+  const categoryLabel = getCategoryLabelById(
+    raw.categoryId,
+    raw.categoryLabel || raw.category
+  );
+
   const tagLabels = getTagLabels(raw.tags);
-  const type = categoryLabel || "Sin categoría";
-  const meters = guessMeters(type, !!raw.featured);
+  const meters = guessMeters(categoryLabel, !!raw.featured);
 
   return {
     id: docSnapshot.id,
+    active: !!raw.active,
     name: raw.name || "Sin nombre",
     subtitle: raw.shortDescription || raw.description || categoryLabel,
     category: categoryLabel,
@@ -205,28 +202,12 @@ function mapFirestoreItem(docSnapshot) {
     imageUrl: raw.imageUrl || "",
     type: categoryLabel || "Sin categoría",
     rarity: tagLabels.length ? tagLabels.join(", ") : "Sin tags",
-    mission: "Disponible",
+    mission: raw.active ? "Disponible" : "No disponible",
     energy: meters.energy,
     sweet: meters.sweet,
     popular: meters.popular,
     order: typeof raw.order === "number" ? raw.order : 9999
   };
-}
-
-function mapCategory(docSnapshot) {
-  const raw = docSnapshot.data();
-  return {
-    id: String(docSnapshot.id).trim(),
-    label: raw.label || docSnapshot.id,
-    active: !!raw.active,
-    order: typeof raw.order === "number" ? raw.order : 9999
-  };
-}
-
-function capitalize(value) {
-  const text = String(value || "").trim();
-  if (!text) return "-";
-  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 function updateDisplay(item) {
@@ -236,8 +217,8 @@ function updateDisplay(item) {
   itemSubtitle.textContent = item.subtitle;
   itemDescription.textContent = item.description;
   itemType.textContent = item.type;
-  itemRarity.textContent = capitalize(item.rarity);
-  itemMission.textContent = capitalize(item.mission);
+  itemRarity.textContent = item.rarity;
+  itemMission.textContent = item.mission;
   energyBar.style.width = item.energy + "%";
   sweetBar.style.width = item.sweet + "%";
   popularBar.style.width = item.popular + "%";
@@ -328,8 +309,8 @@ function buildRecord(item) {
     <p>${escapeHtml(item.subtitle)}</p>
     <div class="badges">
       <span class="badge type">${escapeHtml(item.type)}</span>
-      <span class="badge rare">${escapeHtml(capitalize(item.rarity))}</span>
-      <span class="badge mission">${escapeHtml(capitalize(item.mission))}</span>
+      <span class="badge rare">${escapeHtml(item.rarity)}</span>
+      <span class="badge mission">${escapeHtml(item.mission)}</span>
     </div>
   `;
 
@@ -351,7 +332,10 @@ function getFilteredItems() {
   if (currentFilter === "all") return menuData;
 
   return menuData.filter(item => {
-    return item.categoryKey === currentFilter || item.categoryId.toLowerCase() === currentFilter;
+    return (
+      item.categoryKey === currentFilter ||
+      item.categoryId.toLowerCase() === currentFilter
+    );
   });
 }
 
@@ -384,15 +368,6 @@ function renderList() {
   mobileCountEl.textContent = String(filtered.length);
 }
 
-function escapeHtml(value) {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
 async function loadCategories(db) {
   try {
     const categoriesRef = collection(db, MENU_CATEGORIES_COLLECTION);
@@ -410,6 +385,23 @@ async function loadCategories(db) {
   }
 }
 
+async function loadTags(db) {
+  try {
+    const tagsRef = collection(db, MENU_TAGS_COLLECTION);
+    const tagsQuery = query(
+      tagsRef,
+      where("active", "==", true),
+      orderBy(DEFAULT_ORDER_FIELD, "asc")
+    );
+
+    const snapshot = await getDocs(tagsQuery);
+    tagsData = snapshot.docs.map(mapTag);
+  } catch (error) {
+    console.warn("No se pudieron cargar los tags.", error);
+    tagsData = [];
+  }
+}
+
 async function loadMenu() {
   try {
     validateFirebaseConfig();
@@ -419,8 +411,8 @@ async function loadMenu() {
 
     setStatus("Consultando registros en Firestore...");
 
-   await loadCategories(db);
-await loadTags(db);
+    await loadCategories(db);
+    await loadTags(db);
 
     const menuRef = collection(db, MENU_ITEMS_COLLECTION);
     const menuQuery = query(
