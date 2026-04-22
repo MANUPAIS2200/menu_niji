@@ -11,12 +11,19 @@ import {
 import {
   firebaseConfig,
   MENU_ITEMS_COLLECTION,
+  MENU_CATEGORIES_COLLECTION,
+  MENU_TAGS_COLLECTION,
   DEFAULT_ORDER_FIELD
 } from "./firebase-config.js";
 
-const categoriesContainer = document.getElementById("categories");
-const menuList = document.getElementById("menuList");
+const desktopCategories = document.getElementById("desktopCategories");
+const mobileCategories = document.getElementById("mobileCategories");
+
+const desktopMenuList = document.getElementById("desktopMenuList");
+const mobileMenuList = document.getElementById("mobileMenuList");
+
 const countEl = document.getElementById("resultsCount");
+const mobileCountEl = document.getElementById("mobileResultsCount");
 const statusText = document.getElementById("statusText");
 
 const itemName = document.getElementById("itemName");
@@ -27,11 +34,20 @@ const itemDescription = document.getElementById("itemDescription");
 const itemType = document.getElementById("itemType");
 const itemRarity = document.getElementById("itemRarity");
 const itemMission = document.getElementById("itemMission");
+const itemImage = document.getElementById("itemImage");
+const itemImagePlaceholder = document.getElementById("itemImagePlaceholder");
 const energyBar = document.getElementById("energyBar");
 const sweetBar = document.getElementById("sweetBar");
 const popularBar = document.getElementById("popularBar");
 
+const openMenuBtn = document.getElementById("openMenuBtn");
+const closeMenuBtn = document.getElementById("closeMenuBtn");
+const bottomSheet = document.getElementById("bottomSheet");
+const mobileOverlay = document.getElementById("mobileOverlay");
+
 let menuData = [];
+let categoriesData = [];
+let tagsData = [];
 let currentFilter = "all";
 let currentId = null;
 
@@ -39,68 +55,123 @@ function setStatus(message) {
   statusText.textContent = message;
 }
 
+function isMobile() {
+  return window.innerWidth <= 768;
+}
+
+function openSheet() {
+  bottomSheet.classList.add("active");
+  mobileOverlay.classList.add("active");
+  bottomSheet.setAttribute("aria-hidden", "false");
+  document.body.style.overflow = "hidden";
+}
+
+function closeSheet() {
+  bottomSheet.classList.remove("active");
+  mobileOverlay.classList.remove("active");
+  bottomSheet.setAttribute("aria-hidden", "true");
+  document.body.style.overflow = "";
+}
+
+openMenuBtn.addEventListener("click", openSheet);
+closeMenuBtn.addEventListener("click", closeSheet);
+mobileOverlay.addEventListener("click", closeSheet);
+
+function validateFirebaseConfig() {
+  if (!firebaseConfig.apiKey || firebaseConfig.apiKey === "PEGAR_API_KEY") {
+    throw new Error("Completá la configuración de Firebase en firebase-config.js.");
+  }
+}
+
 function formatPrice(value) {
   if (typeof value === "number") {
     return "$ " + value.toLocaleString("es-AR");
   }
-
   if (typeof value === "string" && value.trim() !== "") {
     return value;
   }
-
   return "Consultar";
 }
 
-function normalizeCategory(rawItem) {
-  const value = rawItem.categoryLabel || rawItem.category || "Sin categoría";
-  return String(value).trim();
+function capitalize(value) {
+  const text = String(value || "").trim();
+  if (!text) return "-";
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
-function normalizeType(rawItem) {
-  const category = normalizeCategory(rawItem).toLowerCase();
-
-  if (category.includes("fr")) return "Frío";
-  if (category.includes("dul")) return "Dulce";
-  if (category.includes("brunch") || category.includes("desay")) return "Brunch";
-  if (category.includes("combo")) return "Combo";
-  return "Caliente";
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
-function normalizeTags(rawItem) {
-  if (Array.isArray(rawItem.tags)) {
-    return rawItem.tags.filter(Boolean).map(t => String(t));
-  }
-  return [];
+function mapCategory(docSnapshot) {
+  const raw = docSnapshot.data();
+  return {
+    id: String(docSnapshot.id).trim(),
+    label: raw.label || docSnapshot.id,
+    active: !!raw.active,
+    order: typeof raw.order === "number" ? raw.order : 9999
+  };
 }
 
-function guessMeters(type, featured) {
+function mapTag(docSnapshot) {
+  const raw = docSnapshot.data();
+  return {
+    id: String(docSnapshot.id).trim(),
+    label: raw.label || docSnapshot.id,
+    active: !!raw.active,
+    order: typeof raw.order === "number" ? raw.order : 9999
+  };
+}
+
+function getCategoryLabelById(categoryId, fallbackLabel) {
+  if (!categoryId) return fallbackLabel || "Sin categoría";
+
+  const found = categoriesData.find(
+    cat => String(cat.id).trim() === String(categoryId).trim()
+  );
+
+  return found?.label || fallbackLabel || "Sin categoría";
+}
+
+function getTagLabels(tagIds) {
+  if (!Array.isArray(tagIds) || !tagIds.length) return [];
+
+  return tagIds
+    .map(tagId => {
+      const found = tagsData.find(
+        tag => String(tag.id).trim() === String(tagId).trim()
+      );
+      return found?.label || null;
+    })
+    .filter(Boolean);
+}
+
+function guessMeters(categoryLabel, featured) {
+  const normalized = String(categoryLabel || "").toLowerCase();
+
   const base = {
     energy: 45,
     sweet: 40,
     popular: featured ? 92 : 70
   };
 
-  switch (type) {
-    case "Caliente":
-      base.energy = 82;
-      base.sweet = 24;
-      break;
-    case "Frío":
-      base.energy = 38;
-      base.sweet = 58;
-      break;
-    case "Dulce":
-      base.energy = 20;
-      base.sweet = 90;
-      break;
-    case "Brunch":
-      base.energy = 55;
-      base.sweet = 12;
-      break;
-    case "Combo":
-      base.energy = 65;
-      base.sweet = 50;
-      break;
+  if (normalized.includes("bebida")) {
+    base.energy = 82;
+    base.sweet = 24;
+  } else if (normalized.includes("dulce")) {
+    base.energy = 20;
+    base.sweet = 90;
+  } else if (normalized.includes("desay") || normalized.includes("brunch")) {
+    base.energy = 55;
+    base.sweet = 18;
+  } else if (normalized.includes("combo")) {
+    base.energy = 65;
+    base.sweet = 50;
   }
 
   return base;
@@ -108,23 +179,30 @@ function guessMeters(type, featured) {
 
 function mapFirestoreItem(docSnapshot) {
   const raw = docSnapshot.data();
-  const type = normalizeType(raw);
-  const categoryLabel = normalizeCategory(raw);
-  const tags = normalizeTags(raw);
-  const meters = guessMeters(type, !!raw.featured);
+
+  const categoryLabel = getCategoryLabelById(
+    raw.categoryId,
+    raw.categoryLabel || raw.category
+  );
+
+  const tagLabels = getTagLabels(raw.tags);
+  const meters = guessMeters(categoryLabel, !!raw.featured);
 
   return {
     id: docSnapshot.id,
+    active: !!raw.active,
     name: raw.name || "Sin nombre",
     subtitle: raw.shortDescription || raw.description || categoryLabel,
     category: categoryLabel,
-    categoryKey: categoryLabel.toLowerCase().trim(),
-    categoryLabel: categoryLabel.toUpperCase(),
+    categoryKey: String(categoryLabel || "").toLowerCase().trim(),
+    categoryId: raw.categoryId ? String(raw.categoryId).trim() : "",
+    categoryLabel: String(categoryLabel || "Sin categoría").toUpperCase(),
     price: formatPrice(raw.price),
     description: raw.description || "Producto disponible en Niji Café.",
-    type,
-    rarity: raw.featured ? "Destacado" : (tags[0] || "Clásico"),
-    mission: raw.stockMode || "Disponible",
+    imageUrl: raw.imageUrl || "",
+    type: categoryLabel || "Sin categoría",
+    rarity: tagLabels.length ? tagLabels.join(", ") : "Sin tags",
+    mission: raw.active ? "Disponible" : "No disponible",
     energy: meters.energy,
     sweet: meters.sweet,
     popular: meters.popular,
@@ -139,32 +217,23 @@ function updateDisplay(item) {
   itemSubtitle.textContent = item.subtitle;
   itemDescription.textContent = item.description;
   itemType.textContent = item.type;
-  itemRarity.textContent = capitalize(item.rarity);
-  itemMission.textContent = capitalize(item.mission);
+  itemRarity.textContent = item.rarity;
+  itemMission.textContent = item.mission;
   energyBar.style.width = item.energy + "%";
   sweetBar.style.width = item.sweet + "%";
   popularBar.style.width = item.popular + "%";
+
+  if (item.imageUrl) {
+    itemImage.src = item.imageUrl;
+    itemImage.classList.remove("hidden");
+    itemImagePlaceholder.classList.add("hidden");
+  } else {
+    itemImage.removeAttribute("src");
+    itemImage.classList.add("hidden");
+    itemImagePlaceholder.classList.remove("hidden");
+  }
+
   setStatus("Registro detectado: " + item.name);
-}
-
-function capitalize(value) {
-  const text = String(value || "").trim();
-  if (!text) return "-";
-  return text.charAt(0).toUpperCase() + text.slice(1);
-}
-
-function buildCategories() {
-  const uniqueCategories = [...new Set(menuData.map(item => item.category))];
-
-  categoriesContainer.innerHTML = "";
-
-  const allBtn = createCategoryButton("Todos", "all", true);
-  categoriesContainer.appendChild(allBtn);
-
-  uniqueCategories.forEach(category => {
-    const button = createCategoryButton(category, category.toLowerCase().trim(), false);
-    categoriesContainer.appendChild(button);
-  });
 }
 
 function createCategoryButton(label, value, isActive) {
@@ -175,12 +244,56 @@ function createCategoryButton(label, value, isActive) {
 
   btn.addEventListener("click", () => {
     document.querySelectorAll(".category-btn").forEach(x => x.classList.remove("active"));
-    btn.classList.add("active");
+    document.querySelectorAll('.category-btn[data-filter="' + value + '"]').forEach(x => {
+      x.classList.add("active");
+    });
     currentFilter = value;
     renderList();
   });
 
   return btn;
+}
+
+function buildCategories() {
+  desktopCategories.innerHTML = "";
+  mobileCategories.innerHTML = "";
+
+  desktopCategories.appendChild(createCategoryButton("Todos", "all", currentFilter === "all"));
+  mobileCategories.appendChild(createCategoryButton("Todos", "all", currentFilter === "all"));
+
+  let categoriesToRender = [];
+
+  if (categoriesData.length) {
+    categoriesToRender = categoriesData
+      .filter(cat => cat.active)
+      .map(cat => ({
+        id: String(cat.id).trim(),
+        label: cat.label
+      }))
+      .filter(cat =>
+        menuData.some(item =>
+          item.categoryId === cat.id || item.categoryKey === cat.id.toLowerCase()
+        )
+      );
+  } else {
+    const seen = new Set();
+    menuData.forEach(item => {
+      const key = item.categoryId || item.categoryKey;
+      if (!seen.has(key)) {
+        seen.add(key);
+        categoriesToRender.push({
+          id: key,
+          label: item.category
+        });
+      }
+    });
+  }
+
+  categoriesToRender.forEach(category => {
+    const value = String(category.id).toLowerCase().trim();
+    desktopCategories.appendChild(createCategoryButton(category.label, value, currentFilter === value));
+    mobileCategories.appendChild(createCategoryButton(category.label, value, currentFilter === value));
+  });
 }
 
 function buildRecord(item) {
@@ -196,8 +309,8 @@ function buildRecord(item) {
     <p>${escapeHtml(item.subtitle)}</p>
     <div class="badges">
       <span class="badge type">${escapeHtml(item.type)}</span>
-      <span class="badge rare">${escapeHtml(capitalize(item.rarity))}</span>
-      <span class="badge mission">${escapeHtml(capitalize(item.mission))}</span>
+      <span class="badge rare">${escapeHtml(item.rarity)}</span>
+      <span class="badge mission">${escapeHtml(item.mission)}</span>
     </div>
   `;
 
@@ -205,21 +318,39 @@ function buildRecord(item) {
     currentId = item.id;
     updateDisplay(item);
     renderList();
+
+    if (isMobile()) {
+      closeSheet();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
   });
 
   return article;
 }
 
-function renderList() {
-  const filtered = currentFilter === "all"
-    ? menuData
-    : menuData.filter(item => item.categoryKey === currentFilter);
+function getFilteredItems() {
+  if (currentFilter === "all") return menuData;
 
-  menuList.innerHTML = "";
+  return menuData.filter(item => {
+    return (
+      item.categoryKey === currentFilter ||
+      item.categoryId.toLowerCase() === currentFilter
+    );
+  });
+}
+
+function renderList() {
+  const filtered = getFilteredItems();
+
+  desktopMenuList.innerHTML = "";
+  mobileMenuList.innerHTML = "";
 
   if (!filtered.length) {
     countEl.textContent = "0";
-    menuList.innerHTML = `<div class="empty-state">No hay productos para esta categoría.</div>`;
+    mobileCountEl.textContent = "0";
+    const emptyHtml = '<div class="empty-state">No hay productos para esta categoría.</div>';
+    desktopMenuList.innerHTML = emptyHtml;
+    mobileMenuList.innerHTML = emptyHtml;
     return;
   }
 
@@ -228,17 +359,47 @@ function renderList() {
     updateDisplay(filtered[0]);
   }
 
-  filtered.forEach(item => menuList.appendChild(buildRecord(item)));
-  countEl.textContent = filtered.length;
+  filtered.forEach(item => {
+    desktopMenuList.appendChild(buildRecord(item));
+    mobileMenuList.appendChild(buildRecord(item));
+  });
+
+  countEl.textContent = String(filtered.length);
+  mobileCountEl.textContent = String(filtered.length);
 }
 
-function escapeHtml(value) {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
+async function loadCategories(db) {
+  try {
+    const categoriesRef = collection(db, MENU_CATEGORIES_COLLECTION);
+    const categoriesQuery = query(
+      categoriesRef,
+      where("active", "==", true),
+      orderBy(DEFAULT_ORDER_FIELD, "asc")
+    );
+
+    const snapshot = await getDocs(categoriesQuery);
+    categoriesData = snapshot.docs.map(mapCategory);
+  } catch (error) {
+    console.warn("No se pudieron cargar las categorías. Se usarán las de los productos.", error);
+    categoriesData = [];
+  }
+}
+
+async function loadTags(db) {
+  try {
+    const tagsRef = collection(db, MENU_TAGS_COLLECTION);
+    const tagsQuery = query(
+      tagsRef,
+      where("active", "==", true),
+      orderBy(DEFAULT_ORDER_FIELD, "asc")
+    );
+
+    const snapshot = await getDocs(tagsQuery);
+    tagsData = snapshot.docs.map(mapTag);
+  } catch (error) {
+    console.warn("No se pudieron cargar los tags.", error);
+    tagsData = [];
+  }
 }
 
 async function loadMenu() {
@@ -250,6 +411,9 @@ async function loadMenu() {
 
     setStatus("Consultando registros en Firestore...");
 
+    await loadCategories(db);
+    await loadTags(db);
+
     const menuRef = collection(db, MENU_ITEMS_COLLECTION);
     const menuQuery = query(
       menuRef,
@@ -258,7 +422,6 @@ async function loadMenu() {
     );
 
     const snapshot = await getDocs(menuQuery);
-
     menuData = snapshot.docs.map(mapFirestoreItem);
 
     if (!menuData.length) {
@@ -271,6 +434,8 @@ async function loadMenu() {
       itemType.textContent = "-";
       itemRarity.textContent = "-";
       itemMission.textContent = "-";
+      itemImage.classList.add("hidden");
+      itemImagePlaceholder.classList.remove("hidden");
       energyBar.style.width = "0%";
       sweetBar.style.width = "0%";
       popularBar.style.width = "0%";
@@ -280,13 +445,16 @@ async function loadMenu() {
     }
 
     menuData.sort((a, b) => {
-      if (a.categoryKey < b.categoryKey) return -1;
-      if (a.categoryKey > b.categoryKey) return 1;
+      const aCat = a.categoryId || a.categoryKey;
+      const bCat = b.categoryId || b.categoryKey;
+      if (aCat < bCat) return -1;
+      if (aCat > bCat) return 1;
       return a.order - b.order;
     });
 
     currentId = menuData[0].id;
     buildCategories();
+    
     updateDisplay(menuData[0]);
     renderList();
     setStatus("Horarios: Todos los días de 10 a 20 hs, menos los Jueves");
@@ -301,17 +469,16 @@ async function loadMenu() {
     itemType.textContent = "-";
     itemRarity.textContent = "-";
     itemMission.textContent = "-";
+    itemImage.classList.add("hidden");
+    itemImagePlaceholder.classList.remove("hidden");
     energyBar.style.width = "0%";
     sweetBar.style.width = "0%";
     popularBar.style.width = "0%";
-    menuList.innerHTML = `<div class="empty-state">No se pudo cargar el menú. Revisá la consola del navegador.</div>`;
-    countEl.textContent = "0";
-  }
-}
 
-function validateFirebaseConfig() {
-  if (!firebaseConfig || firebaseConfig.apiKey === "PEGAR_API_KEY") {
-    throw new Error("Falta completar firebase-config.js con la configuración real del proyecto.");
+    desktopMenuList.innerHTML = '<div class="empty-state">No se pudo cargar el menú. Revisá la consola del navegador.</div>';
+    mobileMenuList.innerHTML = '<div class="empty-state">No se pudo cargar el menú. Revisá la consola del navegador.</div>';
+    countEl.textContent = "0";
+    mobileCountEl.textContent = "0";
   }
 }
 

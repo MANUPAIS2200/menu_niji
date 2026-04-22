@@ -3,11 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>NijiDex | Menú en vivo</title>
+  <title>NijiDex | Menú</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <div class="background-grid"></div>
+  <div class="mobile-overlay" id="mobileOverlay"></div>
 
   <main class="device">
     <section class="panel panel-left">
@@ -36,6 +37,13 @@
           <div class="scanline"></div>
 
           <div class="screen-content">
+            <div class="image-container">
+              <img id="itemImage" class="item-image hidden" alt="Imagen del producto" />
+              <div id="itemImagePlaceholder" class="image-placeholder">
+                Sin imagen
+              </div>
+            </div>
+
             <div class="chip" id="itemCategory">CARGANDO</div>
             <h1 id="itemName">NijiDex</h1>
             <div class="price" id="itemPrice">Conectando menú...</div>
@@ -80,6 +88,8 @@
         <div class="speaker"></div>
       </div>
 
+      <button class="open-menu-btn" id="openMenuBtn">Explorar menú</button>
+
       <div class="bottom-controls">
         <div class="controls-left">
           <div class="big-blue-btn"></div>
@@ -92,7 +102,7 @@
           <div class="dex-label">NIJI-DEX</div>
         </div>
 
-        <div class="dpad">
+        <div class="dpad" aria-hidden="true">
           <span class="up"></span>
           <span class="right"></span>
           <span class="down"></span>
@@ -102,7 +112,7 @@
       </div>
     </section>
 
-    <div class="hinge">
+    <div class="hinge" aria-hidden="true">
       <span></span>
       <span></span>
       <span></span>
@@ -119,14 +129,14 @@
         </div>
       </div>
 
-      <div class="blue-grid">
+      <div class="blue-grid" aria-hidden="true">
         <span></span><span></span><span></span><span></span><span></span>
         <span></span><span></span><span></span><span></span><span></span>
       </div>
 
       <section class="categories-box">
         <div class="box-title">Categorías</div>
-        <div class="categories" id="categories"></div>
+        <div class="categories" id="desktopCategories"></div>
       </section>
 
       <div class="list-header">
@@ -134,7 +144,7 @@
         <span id="resultsCount">0</span>
       </div>
 
-      <section class="records-list" id="menuList"></section>
+      <section class="records-list" id="desktopMenuList"></section>
 
       <div class="right-controls">
         <div class="small-bars">
@@ -151,6 +161,27 @@
       </div>
     </section>
   </main>
+
+  <div class="bottom-sheet" id="bottomSheet" aria-hidden="true">
+    <div class="sheet-header">
+      <div class="sheet-handle"></div>
+      <button class="sheet-close" id="closeMenuBtn" aria-label="Cerrar menú">✕</button>
+    </div>
+
+    <div class="sheet-content">
+      <div class="sheet-title-row">
+        <h2>Explorar menú</h2>
+        <span id="mobileResultsCount">0</span>
+      </div>
+
+      <section class="categories-box mobile-categories-box">
+        <div class="box-title box-title-mobile">Categorías</div>
+        <div class="categories" id="mobileCategories"></div>
+      </section>
+
+      <section class="records-list mobile-records-list" id="mobileMenuList"></section>
+    </div>
+  </div>
 
   <script type="module" src="script.js"></script>
 </body>
