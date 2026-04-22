@@ -289,7 +289,7 @@ async function loadMenu() {
     buildCategories();
     updateDisplay(menuData[0]);
     renderList();
-    setStatus("Menú cargado correctamente desde Firestore.");
+    setStatus("Horarios: Todos los días de 10 a 20 hs, menos los Jueves");
   } catch (error) {
     console.error(error);
     setStatus("Error al cargar Firestore.");
